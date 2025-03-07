@@ -1,9 +1,18 @@
 ### Version History
 
 
+#### v0.11.3
+- Small bugfix in method `meico.mpm.elements.maps.MetricalAccentuationMap.addAccentuationPattern(MetricalAccentuationData data)`. Insufficient handling of attribute `stickToMeasures`.
+
+
+#### v0.11.2
+- Added method `meico.xml.XmlBase.fixDuplicateIds()`. This is a convenience tool to check for duplicate IDs and fix them. The functionality was also added to the meicoApp commandline and GUI mode.
+
+
 #### v0.11.1
 - Small fix in class `meico.mei.Mei2MusicXmlConverter` to address issue #30.
 - Added method `meico.midi.Midi.append()` to concatenate MIDI sequences.
+- Enhancement of method `meico.mei.Mei.resolveExpansions()`. It now also updates references (e.g., `startid`, `endid`) to newly created elements in an expanded subtree. This should now preserve the functionality of performance instructions, ties etc.
 
 
 #### v0.11.0
