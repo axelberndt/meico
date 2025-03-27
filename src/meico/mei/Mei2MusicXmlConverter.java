@@ -443,7 +443,7 @@ public class Mei2MusicXmlConverter {
                 case "history":
                     continue;
                 case "identifier":
-                    if(Helper.getClosest("title", e) != null){
+                    if(Helper.getClosestParent("title", e) != null){
                         this.processTitle(e);
                     }
                     continue;
@@ -1161,18 +1161,21 @@ public class Mei2MusicXmlConverter {
 
                 case "staffDef":
                     // staffDefs in Measures, Sections etc will be examined when layer is looking for corresponding defs, prevents creating new Defs with double numbers
-                    if(this.twIsCurrent){
-                        if (!Helper.getParentElement(e).getLocalName().equals("staffGrp")){
+                    if (this.twIsCurrent) {
+                        Element parent = Helper.getParentElement(e);
+                        if ((parent == null) || !parent.getLocalName().equals("staffGrp")){
                             break;
                         }
-                    }else if(this.pwIsCurrent){ // in part wise a scoredef is at the beginning of every part (hopefully)
-                        Element scoreDef = Helper.getClosest("scoreDef", e);
-                        if(scoreDef != null){
-                            if(!Helper.getParentElement(scoreDef).getLocalName().equals("part")){
+                    } else if (this.pwIsCurrent) { // in part wise a scoredef is at the beginning of every part (hopefully)
+                        Element scoreDef = Helper.getClosestParent("scoreDef", e);
+                        if (scoreDef != null) {
+                            Element parent = Helper.getParentElement(scoreDef);
+                            if ((parent == null) || !parent.getLocalName().equals("part")) {
                                 break;
                             }
-                        }else{ // the current scoreDef is not the first in the part/ section, so don't use it for creating partlist
-                            if(Helper.getPreviousSiblingElement("scoreDef", e) != null || Helper.getPreviousSiblingElement("staffDef", e) != null || Helper.getParentElement(e).getLocalName().equals("section") ){
+                        } else { // the current scoreDef is not the first in the part/ section, so don't use it for creating partlist
+                            Element parent = Helper.getParentElement(e);
+                            if (Helper.getPreviousSiblingElement("scoreDef", e) != null || Helper.getPreviousSiblingElement("staffDef", e) != null || ((parent != null) && parent.getLocalName().equals("section"))) {
                                 break;
                             }
                         }
@@ -1181,7 +1184,7 @@ public class Mei2MusicXmlConverter {
                         break;
 
                 case "staffGrp":
-                    if(Helper.getClosest("section", e) != null) continue; // if the staffGrp is within a section, just continue (the section staffGrps are processed while looking for corresponding defs (this.findCorrespondingDefinition())
+                    if(Helper.getClosestParent("section", e) != null) continue; // if the staffGrp is within a section, just continue (the section staffGrps are processed while looking for corresponding defs (this.findCorrespondingDefinition())
                     this.processStaffGrp(e);
                     continue; // recursion takes place in function, because start and stop attribute of part-group is clear that way
 
@@ -1314,7 +1317,7 @@ public class Mei2MusicXmlConverter {
         String value = titleChild.getValue();
         if(value == null || value.isEmpty()) {return;} // If there is value, there can be no mapping to the work title
         if((title.getLocalName().equals("title") && (attr == null || attr.isEmpty())) || title.getLocalName().equals("identifier")) {attr = "main";} //else{return;} // don't do this for titlePart since title needs no attributes to be mapped correctly
-        if(Helper.getClosest("titleStmt", title) == null) return; // {attr = "subordinate";} // Every other title that is not in a titleStmt will be a subtitle
+        if(Helper.getClosestParent("titleStmt", title) == null) return; // {attr = "subordinate";} // Every other title that is not in a titleStmt will be a subtitle
         value = value.trim();
         String workTitle = this.header.getWork().getWorkTitle();
         switch (attr) {
@@ -1464,6 +1467,7 @@ public class Mei2MusicXmlConverter {
      * Process a mei app element (critical apparatus),
      * in this run the method also processes lem and rdg elements (the two kinds of child elements of app)
      * @param app
+     * @param processInHeader
      */
     private void processApp(Element app, boolean processInHeader) {
         Element takeThisReading = Helper.getFirstChildElement(app, "lem");  // get the first (and hopefully only) lem element, this is the desired reading
@@ -1551,7 +1555,7 @@ public class Mei2MusicXmlConverter {
         if(dateAttr != null && !dateAttr.isEmpty()){
             dateString = dateAttr;
         }
-        if(dateVal != null && !dateVal.isEmpty()){  // Preference for existing element value
+        if(!dateVal.isEmpty()){  // Preference for existing element value
             dateString = dateVal;
         }
         if(dateString.isEmpty()){return;}
@@ -1705,7 +1709,7 @@ public class Mei2MusicXmlConverter {
     }
 
     /**
-     * Update the miscellanous field for all headers.
+     * Update the miscellaneous field for all headers.
      * @param e
      * @param readValue true: use getValue Method to get Element string; false: copy entire XML tree down of e
      */
@@ -1720,7 +1724,7 @@ public class Mei2MusicXmlConverter {
     }
 
     /**
-     * Update the miscellanous field for all headers with arbitrary fieldName and values.
+     * Update the miscelleanous field for all headers with arbitrary fieldName and values.
      * @param fieldName
      * @param val
      */
@@ -1913,31 +1917,34 @@ public class Mei2MusicXmlConverter {
     public void processStaffTW(Element staff){
         String staffN = staff.getAttributeValue("n");
         ScorePart sp = null;
-        if(staffN != null) { // if score-part cannot be found by n attribute, create a new score-part at this position.
+        if (staffN != null) { // if score-part cannot be found by n attribute, create a new score-part at this position.
             sp = this.findScorePartByN(staff.getAttributeValue("n"));
 
-        }else{ // if there is no staffN, try to find the staffIdx and the corresponding score part
-            int staffIdx = Helper.getAllChildElements("staff", Helper.getParentElement(staff)).indexOf(staff);
-            if(staffIdx >= 0){
-                sp =  this.findScorePartByN("" + (staffIdx +1));
+        } else { // if there is no staffN, try to find the staffIdx and the corresponding score part
+            LinkedList<Element> childElements = Helper.getAllChildElements("staff", Helper.getParentElement(staff));
+            if ((childElements != null) && !childElements.isEmpty()) {
+                int staffIdx = childElements.indexOf(staff);
+                if (staffIdx >= 0) {
+                    sp = this.findScorePartByN("" + (staffIdx + 1));
+                }
             }
         }
-        if(sp == null){
+        if (sp == null) {
             int idx = -1;
             if(this.currentPartTW != null) {
                 idx = this.currentScoreTimewise.getPartList().getPartGroupOrScorePart().indexOf(this.currentPartTW);
             }
             String id = "";
-            if(idx == -1) { // create an intermediate id to be added to the part-list
+            if (idx == -1) { // create an intermediate id to be added to the part-list
                 id = "1_1"; // 1_1 is the first score part which will be created to which no score part could be found
-            }else if(this.currentPartTW != null){
+            } else if (this.currentPartTW != null) {
                 String cpID = ((ScorePart) this.currentPartTW.getId()).getId(); //(String) this.currentPartTW.getId();
-                if(cpID != null && !cpID.isEmpty()) {
+                if (cpID != null && !cpID.isEmpty()) {
                     char lastDigitC = cpID.charAt(cpID.length() - 1);
                     int lastDigitInt = Character.getNumericValue(lastDigitC);
                     lastDigitInt += 1;
                     id += "_" + lastDigitInt;
-                }else{
+                } else {
                     id = String.valueOf(UUID.randomUUID()); // last resort
                 }
             }
@@ -1953,7 +1960,7 @@ public class Mei2MusicXmlConverter {
         ScoreTimewise.Measure.Part p = new ScoreTimewise.Measure.Part();
         p.setId(sp);
         this.currentPartTW = p;
-        for(Barline bl : this.barlines){
+        for(Barline bl : this.barlines) {
             this.addObjectToMeasureOrPart(bl);
         } // barlines will be initiated before every measure
         this.currentMeasureTW.getPart().add(p);
@@ -2007,9 +2014,12 @@ public class Mei2MusicXmlConverter {
         List<ScorePartwise.Part.Measure> mList = this.currentPartPW.getMeasure();
 
         if(this.measureListMEI.isEmpty()) {
-            Nodes ml = Helper.getClosest("part", measure).query(".//mei:measure", this.xPathContext); //Helper.getAllChildElements("measure", Helper.getParentElement(measure));
-            for (Node node : ml) {
-                this.measureListMEI.add((Element) node);
+            Element closest = Helper.getClosestParent("part", measure);
+            if (closest != null) {
+                Nodes ml = closest.query(".//mei:measure", this.xPathContext); //Helper.getAllChildElements("measure", Helper.getParentElement(measure));
+                for (Node node : ml) {
+                    this.measureListMEI.add((Element) node);
+                }
             }
         }
         if(!this.tieListMEI.isEmpty()) {
@@ -2086,7 +2096,8 @@ public class Mei2MusicXmlConverter {
             fifths = fifths.multiply(new BigInteger("-1"));
         }
         key.setFifths(fifths);
-        if(Helper.getParentElement(keySig).getLocalName().equals("layer")){
+        Element parent = Helper.getParentElement(keySig);
+        if((parent != null) &&  parent.getLocalName().equals("layer")){
             Attributes attr = new Attributes();
             attr.getKey().add(key);
             this.addObjectToMeasureOrPart(attr);
@@ -2131,7 +2142,8 @@ public class Mei2MusicXmlConverter {
         }
 
         if(addClef){
-            if(Helper.getParentElement(clefElement).getLocalName().equals("layer")){
+            Element parent = Helper.getParentElement(clefElement);
+            if((parent != null) && parent.getLocalName().equals("layer")){
                 Attributes attr = new Attributes();
                 attr.getClef().add(clef);
                 this.addObjectToMeasureOrPart(attr);
@@ -2460,7 +2472,9 @@ public class Mei2MusicXmlConverter {
         if(fontname == null || fontname.isEmpty()) return;
         LyricFont lyricFont = new LyricFont();
         lyricFont.setFontFamily(fontname);
-        if(fontname != null && !fontname.isEmpty()){this.header.getDefaults().getLyricFont().add(lyricFont);}
+        if (fontname != null && !fontname.isEmpty()) {
+            this.header.getDefaults().getLyricFont().add(lyricFont);
+        }
     }
 
     /**
@@ -2679,10 +2693,13 @@ public class Mei2MusicXmlConverter {
     private void processSectionPW (Element section){
         if(Helper.getFirstChildElement("measure", section) == null) return; // no measures = no musical information to be processed, and can't be mapped to part-list
 
-        Element part = Helper.getClosest("part", section);
+        Element part = Helper.getClosestParent("part", section);
         int sectionIdx = Objects.requireNonNull(Helper.getAllChildElements("section", part)).indexOf(section);
-        if(sectionIdx > 0 ) return; // set the currentPart just during the first section in the part
-        List<Element> parts = Helper.getAllChildElements("part", Helper.getClosest("parts", section));
+        if(sectionIdx > 0 )
+            return; // set the currentPart just during the first section in the part
+        List<Element> parts = Helper.getAllChildElements("part", Helper.getClosestParent("parts", section));
+        if (parts == null)
+            return;
         int partIdx = parts.indexOf(part);
         String partId = this.partListIds.get(partIdx);
         Object scorePart = findScorePartById(partId);
@@ -2752,7 +2769,10 @@ public class Mei2MusicXmlConverter {
         this.createMeasureListTW(measure);
 
         if(this.measureListMEI.isEmpty()) {
-            Nodes mList = Helper.getClosest("score", measure).query(".//mei:measure", this.xPathContext);
+            Element closest = Helper.getClosestParent("score", measure);
+            if(closest == null)
+                return;
+            Nodes mList = closest.query(".//mei:measure", this.xPathContext);
             for (Node node : mList) {
                 this.measureListMEI.add((Element) node);
             }
@@ -3100,7 +3120,7 @@ public class Mei2MusicXmlConverter {
                 n.setPitch(pitch);
 
                 // if note has a chord as a parent, add chord tag to all elements following the first note (= first note has no chord tag)
-                Element parentChord = Helper.getClosest("chord", e);
+                Element parentChord = Helper.getClosestParent("chord", e);
                 if(parentChord != null){
                     int noteIdx = Helper.getAllChildElements("note", parentChord).indexOf(e);
                     if(noteIdx >= 1){
@@ -3138,7 +3158,7 @@ public class Mei2MusicXmlConverter {
         //Set Duration and NoteType
         //If the note has no duration attribute itself, find the next parent with duration
         //can be chord, bTrem, fTrem, trem,
-        Element closestWithDuration = Helper.getClosestByAttr("dur", e);
+        Element closestWithDuration = Helper.getClosestParentByAttr("dur", e);
         Element elementWithDuration = (e.getAttributeValue("dur") == null ||
                 e.getAttributeValue("dur").isEmpty()) &&
                 closestWithDuration != null ?
@@ -3180,7 +3200,7 @@ public class Mei2MusicXmlConverter {
      * @param e
      */
     private void processTuplet(Note note, Element e){
-        Element parentTuplet = Helper.getClosest("tuplet", e);
+        Element parentTuplet = Helper.getClosestParent("tuplet", e);
         String tupletAttr = e.getAttributeValue("tuplet");
         String num = "";
         String numbase = "";
@@ -3200,7 +3220,7 @@ public class Mei2MusicXmlConverter {
         }else if(tupletAttr != null && !tupletAttr.isEmpty()) { // will enter this block when element with Attribute tuplet is found
             String[] tupletVals = tupletAttr.split(" "); // tuplet attribute can contain a list of values devided by spaces
             for(String tVal : tupletVals) {
-                Element parentLayer = Helper.getClosest("layer", e); // search beginning with layer, since e may be e.g. in a beam.
+                Element parentLayer = Helper.getClosestParent("layer", e); // search beginning with layer, since e may be e.g. in a beam.
                 // all tuplet elements have to be in same descendant tree; tuplets can't cross measure boundaries
                 List<Element> tupletElements = Helper.getAllDescendantsWithAttribute("tuplet", parentLayer);
                 if (tupletElements == null || tupletElements.isEmpty()) break;
@@ -3519,7 +3539,7 @@ public class Mei2MusicXmlConverter {
                     }
                 }
             }
-            targetElement = Helper.getClosest("section", targetElement);
+            targetElement = Helper.getClosestParent("section", targetElement);
         }while(targetElement != null);
 
         return dType;

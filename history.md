@@ -1,6 +1,24 @@
 ### Version History
 
 
+#### v0.11.6
+- New method `meico.msm.Msm.fitMidiPitches()` added.
+- Added several value range checks in class `meico.midi.EventMaker` for better stability in case of invalid MIDI data.
+
+
+#### v0.11.5
+- Rework of method `meico.mei.Mei.resolveCopyofs()`. This version is more stable, efficient, covers more of the complicated cases, and the code is more readable.
+  - The resolution of elements with `copyof` or `sameas` attribute does basically the same as before, just a bit more efficient.
+  - Furthermore, meico will check the whole XML document for elements that refer to those copied. If these referring elements are within the same subtree just copied, their referencing attributes are updated to the ID of the copied elements. If they are outside the subtree just copied, meico creates copies of these elements, too, and then sets their referencing attributes to the copied elements. This mechanism should preserve more of the integrity of the notation. However, there are cases possible (because MEI allows ambiguous use of `copyof`/`sameas`) that still require manual correction.
+
+
+#### v0.11.4
+- Handled a series of potential NullPointerExceptions in class `meico.mei.Mei2MusicXmlConverter`.
+- Added method `isChildOf()` to class `meico.mei.Helper`.
+- Some further minor tweaks in class `meico.mei.Helper`.
+- Expanded method `meico.mei.Mei.resolveCopyofs()`. Now, it also looks for elements that refer to elements that got copied. If these elements got copied, too, their references are updated. Otherwise, those elements are copied and those copies' references are updated. This should preserve more of the integrity of inter-element relationships.
+
+
 #### v0.11.3
 - Small bugfix in method `meico.mpm.elements.maps.MetricalAccentuationMap.addAccentuationPattern(MetricalAccentuationData data)`. Insufficient handling of attribute `stickToMeasures`.
 

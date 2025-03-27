@@ -446,98 +446,109 @@ public class Mei extends meico.xml.XmlBase {
 
     /**
      * the slacker attribute copyof may occur in the mei document and needs to be resolved before starting the conversion;
-     * this method replaces elements with the copyof attribute by copies of the referred elements;
+     * this method replaces elements with the copyof attribute by deep copies of the referred elements;
      * it may also be used to expand an mei document and free it from copyofs;
-     *
-     * this method does also include the processing of attribute sameas, which is similar to copyof
+     * this method does also include the processing of attribute sameas, which is similar to copyof;
+     * xml:id attributes get updated to prevent duplicates;
+     * elements that reference a copied element (e.g. by attributes startid and endid) receive a treatment as well
      *
      * @return null (no document loaded), an ArrayList with those ids that could not be resolved, or an empty ArrayList if everything went well
      */
     public synchronized ArrayList<String> resolveCopyofs() {
-        Element e = this.getRootElement();                                                              // this also includes the meiHead section, not only the music section, as there might be reference from music into the head
-        if (e == null) return null;
+        Element root = this.getRootElement();                                                           // this also includes the meiHead section, not only the music section, as there might be reference from music into the head
+        if (root == null) return null;
 
-        ArrayList<String> notResolved = new ArrayList<String>();                                             // store those ids that are not resolved
-        HashMap<Element, String> previousPlaceholders = new HashMap<Element, String>();                               // this is a copy of the placeholders hashmap in the while loop; if it does not change from one iteration to the next, there is a placeholder refering to another placeholder refering back to the first; this cannot be resolved and leads to an infinite loop; this hashmap here is to detect this situation
+        System.out.print("Resolving elements with @copyof or @sameas:");
 
-        System.out.print("Resolving copyofs and sameas's:");
+        ArrayList<String> notResolved = new ArrayList<>();                                             // store those ids that are not resolved
+        HashMap<Attribute, String> previousCopyofs = new HashMap<>();
 
-        while (true) {                                                                                  // this loop can only be exited if no placeholders are left (it is possible that multiple runs are necessary when placeholders are within placeholders)
-            HashMap<String, Element> elements = new HashMap<String, Element>();                                       // this hashmap will be filled with elements and their ids
-            HashMap<Element, String> placeholders = new HashMap<Element, String>();                                   // this hashmap will be filled with placeholder elements that have a copyof attribute and the id in the copyof
-
-            Nodes all = e.query("descendant::*[attribute::copyof or attribute::sameas or attribute::xml:id]");  // get all elements with a copyof, sameas or xml:id attribute
-            for (int i = 0; i < all.size(); ++i) {                                                      // for each of them
-                Element element = (Element) all.get(i);                                                 // make an Element out of it
-
-                Attribute a = element.getAttribute("copyof");                                           // get the copyof attribute, if there is one
-                if (a == null)                                                                          // no copyof attribute?
-                    a = element.getAttribute("sameas");                                                 // then maybe a sameas
-                if (a != null) {                                                                        // if there is a copyof or sameas attribute
-                    String copyof = a.getValue();                                                       // get its value
-                    if (copyof.charAt(0) == '#') copyof = copyof.substring(1);                          // local references within the document usually start with #; this must be excluded when searching for the id
-                    placeholders.put(element, copyof);                                                  // put that entry on the placeholder hashmap
-                    //continue;                                                                         // this element may also have an xml:id, so it must be added to the other list as well and we later on have the possibility to resolve references of placeholders to other placeholders
-                }
-
-                a = element.getAttribute("id", "http://www.w3.org/XML/1998/namespace");                 // get the element's xml:id
-                if (a != null) {                                                                        // if it has one
-                    elements.put(a.getValue(), element);                                                // put it on the elements hashmap
-                }
-            }
-
-            if (placeholders.size() == 0) break;                                                        // we are done, this stops the while loop
-
-            // detect placeholders that cannot be resolved but lead to infinite loops because of circular references
-            if ((placeholders.values().containsAll(previousPlaceholders.values()))
-                    && previousPlaceholders.values().containsAll(placeholders.values())) {              // if the same copyof references recur
-                for (Map.Entry<Element, String> placeholder : placeholders.entrySet()) {
-                    notResolved.add(placeholder.getKey().toXML());                                      // add all entries to the return list
-                    placeholder.getKey().getParent().removeChild(placeholder.getKey());                 // delete all placeholders from the xml, we cannot resolve them anyway
-//                    placeholder.getKey().detach();
+        for (AttributesWithIds attributesWithIds = new AttributesWithIds(root); !attributesWithIds.getCopyofs().isEmpty(); attributesWithIds = new AttributesWithIds(root)) {          // this loop can only be exited if no copyof/sameas is left (it is possible that multiple runs are necessary in case of nested copyof/sameas's)
+            // detect copyofs/sameas's that cannot be resolved but lead to infinite loops because of circular references
+            if (attributesWithIds.getCopyofs().equals(previousCopyofs)) {
+                for (Attribute attribute : attributesWithIds.getCopyofs().keySet()) {
+                    Element placeholder = (Element) attribute.getParent();
+                    notResolved.add(placeholder.toXML());
+                    placeholder.getParent().removeChild(placeholder);
                 }
                 System.err.print(" circular copyof or sameas referencing detected, cannot be resolved,");
-                break;                                                                                  // stop the while loop
+                break;                                                                                  // stop the outer loop
             }
-            previousPlaceholders = placeholders;
+            previousCopyofs = attributesWithIds.getCopyofs();                                           // if in the next loop iteration this stays equal, we have circular referencing
 
-            System.out.print(" " + placeholders.size() + " copyofs and sameas's ...");
+            System.out.print(" " + attributesWithIds.getCopyofs().size() + " copyof and sameas elements ...");
 
-            // replace alle placeholders in the xml tree by copies of the source
-            for (Map.Entry<Element, String> placeholder : placeholders.entrySet()) {                    // for each placeholder
-                Element found = elements.get(placeholder.getValue());                                   // search the elements hashmap for the id
-
-                if (found == null) {                                                                    // if no element with this id has been found
-                    notResolved.add(placeholder.getKey().toXML());                                      // add entry to the return list
-                    placeholder.getKey().getParent().removeChild(placeholder.getKey());                 // delete the placeholder from the xml, we cannot process it anyway
-//                    placeholder.getKey().detach();
-                    continue;                                                                           // continue with the next placeholder
+            // replace all copyof/sameas elements in the xml tree by copies of the original
+            for (Map.Entry<Attribute, String> entry : attributesWithIds.getCopyofs().entrySet()) {
+                Element placeholder = (Element) entry.getKey().getParent();
+                Element original = attributesWithIds.getElementById(entry.getValue());
+                if (original == null) {                                                                 // if no element with this id has been found
+                    notResolved.add(placeholder.toXML());                                               // add entry to the return list
+                    placeholder.getParent().removeChild(placeholder);                                   // delete the placeholder from the xml, we cannot process it anyway
+                    continue;
                 }
+                Element copy = original.copy();                                                         // make a deep copy of the original to be used as replacement for the placeholder
 
-                // make the replacement
-                Element copy = found.copy();                                                               // make a deep copy of the source
-
+                // insert the copy in the XML tree at the position of the placeholder
                 try {
-                    placeholder.getKey().getParent().replaceChild(placeholder.getKey(), copy);          // replace the placeholder by it
-//                System.out.println("replacing: " + placeholder.getKey().toElement() + "\nby\n" + copy.toElement() + "\n\n");
+//                    System.out.println("replacing: " + placeholder.toXML() + "\nby\n" + copy.toXML() + "\n\n");
+                    placeholder.getParent().replaceChild(placeholder, copy);                            // replace the placeholder by it
                 } catch (NoSuchChildException | NullPointerException | IllegalAddException error) {     // if something went wrong, I don't know why as none of these exceptions should occur, just to be sure
                     error.printStackTrace();                                                            // print error
-                    notResolved.add(placeholder.getKey().toXML());                                      // add entry to the return list
+                    notResolved.add(placeholder.toXML());                                               // add entry to the return list
                     continue;
                 }
 
                 // generate new ids for those elements with a copied id
-                Nodes ids = copy.query("descendant-or-self::*[@xml:id]");                                                   // get all the nodes with an xml:id attribute
-                for (int j = 0; j < ids.size(); ++j) {                                                                      // go through all the nodes
-                    Element idElement = (Element) ids.get(j);
-                    String uuid = idElement.getAttributeValue("id", "http://www.w3.org/XML/1998/namespace") + "_meico_" + UUID.randomUUID().toString();   // generate new ids for them
-                    idElement.getAttribute("id", "http://www.w3.org/XML/1998/namespace").setValue(uuid);                    // and write into the attribute
+                HashMap<String, String> idReplacements = new HashMap<>();
+                for (Node node : copy.query("descendant-or-self::node()/@xml:id")) {                    // get each xml:id attribute in the subtree just copied
+                    Attribute idAtt = (Attribute) node;
+                    String originalId = idAtt.getValue();
+                    String newId = originalId + "_meico_" + UUID.randomUUID().toString();               // generate new ids for them
+                    idAtt.setValue(newId);                                                              // and write into the attribute
+                    idReplacements.put(originalId, newId);
                 }
 
                 // but keep the possibly existing placeholder id for the copy's root node
-                Attribute id = placeholder.getKey().getAttribute("id", "http://www.w3.org/XML/1998/namespace");             // get the placeholder's xml:id
-                if (id != null) {                                                                                           // if the placeholder has one
-                    copy.getAttribute("id", "http://www.w3.org/XML/1998/namespace").setValue(id.getValue());     // set the copy's id to the id of the placeholder
+                Attribute id = placeholder.getAttribute("id", "http://www.w3.org/XML/1998/namespace");          // get the placeholder's xml:id
+                if (id != null) {                                                                                       // if the placeholder has one
+                    copy.getAttribute("id", "http://www.w3.org/XML/1998/namespace").setValue(id.getValue());    // set the copy's id to the id of the placeholder
+                }
+
+                // handle attributes/elements that reference the elements we just copied
+                AttributesWithIds internalReferences = new AttributesWithIds(copy);
+                HashMap<Element, ArrayList<Attribute>> originalElementsNewAttributes = new HashMap<>();
+                for (Map.Entry<String, String> idReplacement : idReplacements.entrySet()) {             // for each ID for which we have a mapping
+                    String originalId = idReplacement.getKey();
+                    String newId = idReplacement.getValue();
+
+                    // check internal elements first, these are not in the attributesWithIds, yet
+                    ArrayList<Attribute> attributes = internalReferences.getReferences().get(originalId);   // get all attributes that refer to this ID
+                    if (attributes != null) {
+                        for (Attribute attribute : attributes)
+                            attribute.setValue("#" + newId);                                            // we just update the reference
+                    }
+
+                    // now the external elements with references into the original subtree, here we need new elements that do the same for the copied subtree
+                    attributes = attributesWithIds.getReferences().get(originalId);
+                    if (attributes == null)
+                        continue;
+                    for (Attribute originalAttribute : attributes) {
+                        Element originalElement = (Element) originalAttribute.getParent();              // get the element that we will have to copy and edit its attribute(s)
+                        ArrayList<Attribute> newAttributes = originalElementsNewAttributes.computeIfAbsent(originalElement, k -> new ArrayList<>()); // get or create the list of attributes to be edited
+                        Attribute newAttribute = originalAttribute.copy();                              // create a new Attribute
+                        newAttribute.setValue("#" + newId);                                             // set its value to the new ID reference
+                        newAttributes.add(newAttribute);                                                // add it to the list
+                    }
+                }
+                for (Map.Entry<Element, ArrayList<Attribute>> origEltNewAtt : originalElementsNewAttributes.entrySet()) {   // for each external element that must be copied and gets new attribute(s)
+                    Element newElt = origEltNewAtt.getKey().copy();                                     // create the new element
+                    for (Attribute newAtt : origEltNewAtt.getValue())
+                        newElt.addAttribute(newAtt);                                                    // this replaces the original attribute by the new one
+                    Attribute newEltId = newElt.getAttribute("id", "http://www.w3.org/XML/1998/namespace");
+                    if (newEltId != null)                                                               // if the original element has an ID
+                        newEltId.setValue(newEltId.getValue() + "_meico_" + UUID.randomUUID().toString());  // the new element needs a unique one
+                    origEltNewAtt.getKey().getParent().appendChild(newElt);                             // add hte new element to the XML tree as sibling of the original element
                 }
             }
         }
