@@ -572,6 +572,23 @@ public class GenericMap extends AbstractXmlSubtree {
     }
 
     /**
+     * merge the specified map into this one
+     * @param map the map to be merged; the map elements get copied into this one, not moved, hence the original remains unaltered
+     */
+    public void merge(GenericMap map) {
+        if (map == null)
+            return;
+        if (!map.getType().equals(this.getType())) {
+            System.err.println("Cannot merge maps of different types: " + this.getType() + " vs. " + map.getType());
+            return;
+        }
+
+        for (KeyValue<Double, Element> kv : map.getAllElements()) {
+            this.addElement(kv.getValue().copy());
+        }
+    }
+
+    /**
      * remove the map entry at the specified index
      * @param index
      */
@@ -749,6 +766,17 @@ public class GenericMap extends AbstractXmlSubtree {
             String newValue = valueMappings.get(a.getValue());              // get its new value
             if (newValue != null)                                           // if there is a mapping to update it, the new value is != null
                 a.setValue(newValue);                                       // set the new value
+        }
+    }
+
+    /**
+     * adds a tick offset to all date attributes
+     * @param offset in ticks
+     */
+    public void addOffsetToAllDates(double offset) {
+        for (KeyValue<Double, Element> element : this.elements) {
+            element.setKey(element.getKey() + offset);
+            element.getValue().addAttribute(new Attribute("date", Double.toString(element.getKey())));
         }
     }
 }

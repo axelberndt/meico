@@ -143,6 +143,16 @@ public class AccentuationPatternDef extends AbstractDef {
     }
 
     /**
+     * create a deep copy of this
+     * @return
+     */
+    @Override
+    public AccentuationPatternDef clone() {
+        Element xmlCopy = this.getXml().copy();
+        return AccentuationPatternDef.createAccentuationPatternDef(xmlCopy);
+    }
+
+    /**
      * create and add an accentuation to this accentuationPatternDef
      * @param beat
      * @param value

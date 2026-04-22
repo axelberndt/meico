@@ -4,6 +4,8 @@ import meico.mei.Helper;
 import meico.xml.AbstractXmlSubtree;
 import nu.xom.Attribute;
 import nu.xom.Element;
+import nu.xom.Node;
+import nu.xom.Nodes;
 
 /**
  * This abstract class reduces the amount of copy code in the ...Def classes.
@@ -75,4 +77,36 @@ public abstract class AbstractDef extends AbstractXmlSubtree {
 
         return this.id.getValue();
     }
+
+    /**
+     * Compare the provided Def with this one. This implementation excludes XML IDs from the comparison!
+     * @param obj
+     * @return
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof AbstractDef))
+            return false;
+
+        AbstractDef other = (AbstractDef) obj;
+
+        if (!this.getName().equals(other.getName()))
+            return false;
+
+        Element thisCopy = this.getXml().copy();
+        Element otherCopy = other.getXml().copy();
+
+        // xml:id attributes are not relevant for comparison
+        Nodes atts = thisCopy.query("descendant-or-self::node()/@xml:id");
+        for (Node att : atts)
+            att.detach();
+        atts = otherCopy.query("descendant-or-self::node()/@xml:id");
+        for (Node att : atts)
+            att.detach();
+
+        return AbstractXmlSubtree.equals(thisCopy, otherCopy);
+    }
+
+    @Override
+    public abstract AbstractDef clone();
 }

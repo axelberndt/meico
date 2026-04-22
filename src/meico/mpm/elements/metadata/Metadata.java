@@ -375,4 +375,50 @@ public class Metadata extends AbstractXmlSubtree {
 //            relatedResourcesElt.detach();
         }
     }
+
+    /**
+     * merge the provided metadata into this; avoid doubles
+     * @param metadata
+     */
+    public void merge(Metadata metadata) {
+        if (metadata == null)
+            return;
+
+        for (Author author : metadata.getAuthors()) {
+            if (this.getAuthor(author.getName()) == null) {
+                Element authorElt = author.getXml().copy();
+                this.addAuthor(Author.createAuthor(authorElt));
+            }
+        }
+
+        for (Comment comment : metadata.getComments()) {
+            boolean found = false;
+            for (Comment thisComment : this.getComments()) {
+                if (thisComment.getText().equals(comment.getText())) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                Element commentElt = comment.getXml().copy();
+                this.addComment(Comment.createComment(commentElt));
+            }
+        }
+
+        if (metadata.getRelatedResources().isEmpty())
+            return;
+        for (RelatedResource resource : metadata.getRelatedResources()) {
+            boolean found = false;
+            for (RelatedResource thisResource : this.getRelatedResources()) {
+                if (thisResource.equals(resource)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                Element resourceElt = resource.getXml().copy();
+                this.addRelatedResource(RelatedResource.createRelatedResource(resourceElt));
+            }
+        }
+    }
 }

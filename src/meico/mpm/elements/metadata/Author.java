@@ -169,4 +169,18 @@ public class Author extends AbstractXmlSubtree {
 
         return this.id.getValue();
     }
+
+    /**
+     * comparison of an Author object with another object
+     * @param obj
+     * @return
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof Author))
+            return false;
+
+        Author other = (Author) obj;
+        return this.getName().equals(other.getName()) && this.getNumber().equals(other.getNumber()) && this.getId().equals(other.getId());
+    }
 }

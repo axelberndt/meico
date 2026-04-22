@@ -7,6 +7,7 @@ import nu.xom.Element;
 import nu.xom.Nodes;
 
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This class interfaces MPM's dated environment.
@@ -289,5 +290,30 @@ public class Dated extends AbstractXmlSubtree {
      */
     public Part getPart() {
         return this.part;
+    }
+
+    /**
+     * adds a tick offset to all date attributes
+     * @param offset in ticks
+     */
+    public void addOffsetToAllDates(double offset) {
+        for (GenericMap map : this.getAllMaps().values()) {
+            map.addOffsetToAllDates(offset);
+        }
+    }
+
+    /**
+     * merge the contents of the provided object into this
+     * @param dated the object to be merged into this one
+     */
+    public void merge(Dated dated) {
+        for (Map.Entry<String, GenericMap> map : dated.getAllMaps().entrySet()) {   // for each map to be merged into this
+            GenericMap targetMap = this.getMap(map.getKey());                       // find the corresponding map in this
+
+            if (targetMap == null)                                                  // if there is no such corresponding map present, we can just add a copy of it
+                this.addMap(map.getValue().getXml().copy());
+            else
+                targetMap.merge(map.getValue());                                    // otherwise we have to merge the maps
+        }
     }
 }

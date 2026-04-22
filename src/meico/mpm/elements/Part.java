@@ -301,4 +301,22 @@ public class Part extends AbstractXmlSubtree {
 
         return this.id.getValue();
     }
+
+    /**
+     * adds a tick offset to all date attributes
+     * @param offset in ticks
+     */
+    public void addOffsetToAllDates(double offset) {
+        this.getDated().addOffsetToAllDates(offset);
+    }
+
+    /**
+     * merge the contents of the provided part into this one
+     * @param part the part to be merged into this one
+     */
+    public void merge(Part part) {
+        this.getHeader().merge(part.getHeader());
+        this.getDated().merge(part.getDated());
+    }
+
 }

@@ -1,6 +1,24 @@
 ### Version History
 
 
+#### v0.11.12
+- Added new method `meico.mei.Helper.haveSameParent()` to check whether the provided XML nodes have the same parent.
+- Added support for MEI's `data.DURATION.mensural` duration values. However, they are always interpreted in a dyadic meter, not triadic!
+- Enhancement of method `meico.mei.Mei.layersToStaffs()` to ensure that the sequence of elements within a `measure` does not get mixed up.
+
+
+#### v0.11.11
+- Slight enhancement in method `meico.msm.Msm.convertPPQ()`.
+- New method `compareFlatElements()` in class `meico.mei.Helper` that compares two `Element` objects for equal `local-name` and attributes, but not for possible child elements.
+- New methods `concat()` and `concatMaps()` in class `meico.msm.Msm` to concatenate two MSMs and related MPMs if present.
+- New methods `addOffsetToAllDates()` in classes `meico.mpm.elements.Performance`, `meico.mpm.elements.Global`, `meico.mpm.elements.Part`, `meico.mpm.elements.Dated`, and `meico.mpm.elements.maps.GenericMap` to add a tick offset to all date attributes in a map.
+- New method `meico.mpm.elements.Performance.getPart()` to retrieve an MSM `part` with its full signature.
+- New methods `merge()` in classes `meico.mpm.elements.metadata.Metadata`, `meico.mpm.elements.Performance`, `meico.mpm.elements.Global`, `meico.mpm.elements.Part`, `meico.mpm.elements.Header`, `meico.mpm.elements.Dated`, `meico.mpm.elements.maps.GenericMap` `meico.mpm.elements.styles.GenericStyle`
+- Class `meico.xml.AbstractXmlSubtree` got an implementation of method `equals()` that compares two XML trees via string comparison on the basis of canonicalized XML code.
+  - Specialized overrides of the aforementioned method `equals()` are provided in classes `meico.mpm.elements.styles.GenericStyle` and `meico.mpm.elements.styles.defs.AbstractDef`.
+- New methods `clone()` have been implemented for all `...Def` classes.
+
+
 #### v0.11.10
 - Made classes `meico.xml.XmlBase` and all its derived classes clonable.
 - Added method `meico.mei.layersToStaffs()`. This method allows converting MEI staffs with multiple layers into a single staff per layer. The method takes attribute `n` into account to generate a reasonable order of `staffDef` elements that replace the original ones.

@@ -10,6 +10,8 @@ import nu.xom.Attribute;
 import nu.xom.Element;
 
 import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * This class interfaces MPM styleDef elements.
@@ -225,4 +227,61 @@ public class GenericStyle<E extends AbstractDef> extends AbstractXmlSubtree {
     public boolean isEmpty() {
         return this.defs.isEmpty();
     }
+
+    /**
+     * Compare the provided styleDef with this one. This implementation excludes XML IDs from the comparison!
+     * Also, the sequence of elements does not matter here!
+     * @param o
+     * @return
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof GenericStyle))
+            return false;
+
+        GenericStyle other = (GenericStyle) o;
+
+        if (!this.getName().equals(other.getName()))
+            return false;
+
+        if (this.getAllDefs().size() != other.getAllDefs().size())
+            return false;
+
+        for (AbstractDef def : this.defs.values()) {
+            if (!other.getDef(def.getName()).equals(def))
+                return false;
+        }
+        return true;
+    }
+
+    /**
+     * Merge the Defs of the provided styleDef into this one.
+     * @param style
+     */
+    public void merge(GenericStyle<E> style) {
+        for (Map.Entry<String, E> entry : style.defs.entrySet()) {
+            String name = entry.getKey();
+            AbstractDef def = entry.getValue();
+
+            // add all defs that are not already present in this styleDef under the respective name,
+            AbstractDef existingDef = this.getDef(name);
+            if (existingDef == null) {
+                this.addDef((E) def.clone());
+                continue;
+            }
+
+            // if defs are equal, we are done
+            if (def.equals(existingDef))
+                continue;
+
+            // otherwise rename the def and add it
+            E newDef = (E) def.clone();
+            if (newDef == null)
+                continue;
+
+            String newName = name + "_ duplicate_name_changed_by_meico_" + UUID.randomUUID().toString();
+            newDef.getXml().getAttribute("name").setValue(newName);
+            this.addDef(newDef);
+        }
+   }
 }

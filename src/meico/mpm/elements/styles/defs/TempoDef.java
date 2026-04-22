@@ -89,6 +89,16 @@ public class TempoDef extends AbstractDef {
     }
 
     /**
+     * create a deep copy of this
+     * @return
+     */
+    @Override
+    public TempoDef clone() {
+        Element xmlCopy = this.getXml().copy();
+        return TempoDef.createTempoDef(xmlCopy);
+    }
+
+    /**
      * get the TempoDef's value
      * @return
      */

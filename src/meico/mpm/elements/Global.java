@@ -2,8 +2,11 @@ package meico.mpm.elements;
 
 import meico.mei.Helper;
 import meico.mpm.Mpm;
+import meico.mpm.elements.maps.GenericMap;
 import meico.xml.AbstractXmlSubtree;
 import nu.xom.Element;
+
+import java.util.ArrayList;
 
 /**
  * This class interfaces the global information, as opposed to local, i.e. part-specific information.
@@ -116,4 +119,22 @@ public class Global extends AbstractXmlSubtree {
     public Dated getDated() {
         return this.dated;
     }
+
+    /**
+     * adds a tick offset to all date attributes
+     * @param offset in ticks
+     */
+    public void addOffsetToAllDates(double offset) {
+        this.getDated().addOffsetToAllDates(offset);
+    }
+
+    /**
+     * merge the contents of the provided global environment into this one
+     * @param global the global environment to be merged into this one
+     */
+    public void merge(Global global) {
+        this.getHeader().merge(global.getHeader());
+        this.getDated().merge(global.getDated());
+    }
+
 }

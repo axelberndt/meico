@@ -96,6 +96,16 @@ public class OrnamentDef extends AbstractDef {
     }
 
     /**
+     * create a deep copy of this
+     * @return
+     */
+    @Override
+    public OrnamentDef clone() {
+        Element xmlCopy = this.getXml().copy();
+        return OrnamentDef.createOrnamentDef(xmlCopy);
+    }
+
+    /**
      * access the temporalSpread transformer
      * @return
      */

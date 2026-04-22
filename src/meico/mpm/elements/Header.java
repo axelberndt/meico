@@ -3,6 +3,7 @@ package meico.mpm.elements;
 import meico.mei.Helper;
 import meico.mpm.Mpm;
 import meico.mpm.elements.styles.*;
+import meico.mpm.elements.styles.defs.AbstractDef;
 import meico.xml.AbstractXmlSubtree;
 import nu.xom.Element;
 import nu.xom.Nodes;
@@ -200,7 +201,7 @@ public class Header extends AbstractXmlSubtree {
 
     /**
      * merge the specified styleDef into the specified style type
-     * @param type if the type doe not exist it will be generated
+     * @param type if the type does not exist, it will be generated
      * @param styleDef if there is already a styleDef with this name it will be replaced
      */
     public void addStyleDef(String type, GenericStyle styleDef) {
@@ -293,7 +294,7 @@ public class Header extends AbstractXmlSubtree {
 
         HashMap<String, GenericStyle> allStyleDefs = this.getAllStyleDefs(type);
         if (allStyleDefs.isEmpty()) {
-            System.out.println("There are no styleDef elements for type " + type);
+            System.out.println("There are no styleDef elements for type \"" + type + "\".");
             return null;
         }
 
@@ -317,5 +318,33 @@ public class Header extends AbstractXmlSubtree {
     public void clear() {
         this.getXml().removeChildren();
         this.styleDefs.clear();
+    }
+
+    /**
+     * merge the contents of the provided object into this
+     * @param header the object to be merged into this one
+     */
+    public void merge(Header header) {
+        for (Map.Entry<String, HashMap<String, GenericStyle>> st : header.getAllStyleTypes().entrySet()) {  // for each style type
+            String styleType = st.getKey();
+
+            for (Map.Entry<String, GenericStyle> s : st.getValue().entrySet()) {        // for each styleDef
+                String styleName = s.getKey();
+                GenericStyle style = s.getValue();
+
+                GenericStyle targetStyle = this.getStyleDef(styleType, styleName);      // find the corresponding styleDef in this
+                if (targetStyle == null) {                                              // if it doesn't yet exist in this
+                    style = GenericStyle.createGenericStyle(style.getXml().copy());     // create a copy
+                    this.addStyleDef(styleType, style);                                 // add it to this
+                    continue;
+                }
+
+                // otherwise, we compare the styleDefs
+                if (style.equals(targetStyle))      // if the styles are equal
+                    continue;                       // we are done with them
+
+                targetStyle.merge(style);           // merge the styles
+            }
+        }
     }
 }

@@ -10,6 +10,7 @@ import meico.xml.AbstractXmlSubtree;
 import nu.xom.Attribute;
 import nu.xom.Element;
 import nu.xom.Elements;
+import nu.xom.Nodes;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -241,6 +242,25 @@ public class Performance extends AbstractXmlSubtree {
     }
 
     /**
+     * Access the part with the specified signature
+     * @param number
+     * @param name
+     * @param midiChannel
+     * @param midiPort
+     * @return the part or null
+     */
+    public Part getPart(int number, String name, int midiChannel, int midiPort) {
+        for (Part p : this.parts) {
+            if ((p.getNumber() == number)
+                    && p.getName().equals(name)
+                    && (p.getMidiChannel() == midiChannel)
+                    && (p.getMidiPort() == midiPort))
+                return p;
+        }
+        return null;
+    }
+
+    /**
      * add the part to the performance,
      * caution: if another part with the same number exists already in this performance, getPart(number) will return only the first
      * @param part
@@ -364,6 +384,42 @@ public class Performance extends AbstractXmlSubtree {
      */
     public void setPPQ(int ppq) {
         this.setPulsesPerQuarter(ppq);
+    }
+
+    /**
+     * this method converts the timing basis, i.e., it sets the new ppq value and converts all attributes date, date.end, duration etc. in the whole document
+     * @param ppq
+     */
+    public void convertPPQ(int ppq) {
+        int ppqOld = this.getPPQ();
+        if (ppqOld == ppq)
+            return;
+
+        System.out.println("Converting timing basis of performance " + this.getName() + " from " + this.getPulsesPerQuarter() + " to " + ppq + " pulses per quarter note.");
+
+        this.setPPQ(ppq);
+
+        // find all attributes date, date.end and duration, and convert their values
+        Nodes atts = this.getXml().query("descendant::*[attribute::date]/attribute::date | descendant::*[attribute::duration]/attribute::duration | descendant::*[attribute::absoluteDuration]/attribute::absoluteDuration | descendant::*[attribute::absoluteDurationChange]/attribute::absoluteDurationChange | descendant::*[attribute::absoluteDelay]/attribute::absoluteDelay");
+        for (int i = 0; i < atts.size(); ++i) {
+            Attribute att = (Attribute) atts.get(i);
+            att.setValue(Double.toString(((Double.parseDouble(att.getValue()) * ppq) / ppqOld)));
+        }
+
+        // update the data structure
+        try {
+            this.parseData(this.getXml());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * this method converts the timing basis, i.e., it sets the new ppq value and converts all attributes date, date.end, duration etc. in the whole document
+     * @param ppq
+     */
+    public void convertPulsesPerQuarter(int ppq) {
+        this.convertPPQ(ppq);
     }
 
     /**
@@ -666,5 +722,37 @@ public class Performance extends AbstractXmlSubtree {
             return null;
 
         return this.id.getValue();
+    }
+
+    /**
+     * adds a tick offset to all date attributes
+     * @param offset in ticks
+     */
+    public void addOffsetToAllDates(double offset) {
+        this.getGlobal().addOffsetToAllDates(offset);
+        for (Part part : this.getAllParts()) {
+            part.addOffsetToAllDates(offset);
+        }
+    }
+
+    /**
+     * merge the contents of the provided performance into this performance
+     * @param performance the performance to be merged into this one
+     */
+    public void merge(Performance performance) {
+        this.getGlobal().merge(performance.getGlobal());                        // merge global environment
+
+        for (Part part : performance.getAllParts()) {                           // go through all parts
+            Part targetPart = this.getPart(part.getNumber(), part.getName(), part.getMidiChannel(), part.getMidiPort());
+            if (targetPart != null) {
+                targetPart.merge(part);
+                continue;
+            }
+
+            // if did not find this precise part in this performance, add a clone of it
+            Element cloneElement = part.getXml().copy();        // create a deep copy
+            Part clonePart = Part.createPart(cloneElement);     // make a part
+            this.addPart(clonePart);                            // add it to this performance
+        }
     }
 }

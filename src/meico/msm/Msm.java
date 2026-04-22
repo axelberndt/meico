@@ -1,6 +1,8 @@
 package meico.msm;
 
+import meico.mpm.Mpm;
 import meico.mpm.elements.Performance;
+import meico.mpm.elements.maps.GenericMap;
 import meico.pitches.FeatureVector;
 import meico.pitches.Key;
 import meico.pitches.Pitches;
@@ -146,6 +148,191 @@ public class Msm extends AbstractMsm {
     }
 
     /**
+     * This method concatenates a list of Msm objects into one Msm instance by concatenating all their maps.
+     * The dates of the map elements are changed, so the contents of a later Msm follows the contents of a
+     * previous one in the musical sequence.
+     * @param msms the sequence of Msm objects to be concatenated
+     * @return one Msm that combines all the single ones
+     */
+    public static Msm concat(List<Msm> msms) {
+        return Msm.concat(new KeyValue<>(msms, new ArrayList<Mpm>(msms.size()))).getKey();
+    }
+
+    /**
+     * This method concatenates a list of Msm objects and their corresponding Mpm objects into one Msm and Mpm, resp.,
+     * by concatenating all their maps. The dates of the map elements are changed, so the contents of a later Msm/Mpm
+     * follows the contents of a previous one in the musical sequence.
+     * @param msmMpmPairs the sequence of Msm objects to be concatenated is in the key, the corresponding Mpm objects are in the value at the same index; the user should take care that all IDs are unique throughout all these MSMs and MPMs!
+     * @return a pair of one Msm and one Mpm that combines all the single ones
+     */
+    public static KeyValue<Msm, Mpm> concat(KeyValue<List<Msm>, List<Mpm>> msmMpmPairs) {
+        if (msmMpmPairs == null)                    // we cannot concatenate nothing
+            return new KeyValue<>(null, null);      // return an empty key-value pair
+
+        Msm allInOneMsm = null;
+        Mpm allInOneMpm = null;
+        Attribute msmTitle = null;
+        int ppq = -1;                               // the ppq of the first MSM will be the target ppq for the resulting MSMs and MPMs
+        double totalLength = 0.0;                   // (in ticks) is increased with each MSM
+        Element allInOneMsmGlobalHeader = null;
+        Element allInOneMsmGlobalDated = null;
+
+        // find the first valid Msm and initialize the above variables
+        int i = 0;
+        for (; i < msmMpmPairs.getKey().size(); ++i) {
+            Msm msm = msmMpmPairs.getKey().get(i);
+            if (msm != null) {
+                allInOneMsm = msm.clone();
+                msmTitle = msm.getRootElement().getAttribute("title");
+                ppq = msm.getPPQ();
+
+                // create a default output file if the first Msm has a non-null file
+                allInOneMsmGlobalHeader = allInOneMsm.getGlobal().getFirstChildElement("header");
+                allInOneMsmGlobalDated = allInOneMsm.getGlobal().getFirstChildElement("dated");
+                int fileNumber = 0;
+                if (msm.getFile() != null) {
+                    File directory = msm.getFile().getParentFile();
+                    File allInOneMsmFile = new File(directory, "concatenated-" + String.format("%03d", fileNumber) + ".msm");
+                    while (allInOneMsmFile.exists()) {
+                        ++fileNumber;
+                        allInOneMsmFile = new File(directory, "concatenated-" + String.format("%03d", fileNumber) + ".msm");
+                    }
+                    allInOneMsm.setFile(allInOneMsmFile);
+                }
+
+                // copy the Mpm if there is one at the same index, set its file as well
+                Mpm mpm = msmMpmPairs.getValue().get(i);
+                if (mpm == null) {
+                    allInOneMpm = Mpm.createMpm();
+                } else {
+                    allInOneMpm = new Mpm(mpm.getDocument());
+                    for (Performance performance : allInOneMpm.getAllPerformances())
+                        if (performance.getPPQ() != ppq) {
+                            System.err.println("Warning: No consistent timing bases (Pulses Per Quarter/PPQ) throughout the MSMs and MPMs! Expected PPQ=" + ppq + ".");
+                            allInOneMpm.removePerformance(performance);     // remove performances with a timing basis inconsistent to the MPM
+                        }
+                }
+                if (allInOneMsm.getFile() != null)
+                    allInOneMpm.setFile(new File(allInOneMsm.getFile().getParentFile(), "concatenated-" + String.format("%03d", fileNumber) + ".mpm"));
+
+                break;  // we have found the first Msm, done the initialization, the for loop below will doe the rest
+            }
+        }
+
+        // now append all remaining Msms and Mpms to the initialized ones
+        for (++i; i < msmMpmPairs.getKey().size(); ++i) {
+            Msm msm = msmMpmPairs.getKey().get(i);
+            if (msm == null)                        // if the entry at the current index is null, we have no Msm, thus no length, thus cannot concatenate the corresponding Mpm
+                continue;                           // go on with the next entries in the list
+
+            assert allInOneMsm != null;
+            totalLength = allInOneMsm.getEndDate();
+            Msm cloneMsm = msm.clone();
+            cloneMsm.convertPulsesPerQuarter(ppq);  // all MSMs should have the same PPQ
+            msmTitle.setValue(msmTitle.getValue() + " + " + cloneMsm.getTitle());
+
+            // append msm to allInOneMsm
+            assert allInOneMsmGlobalHeader != null;
+            assert allInOneMsmGlobalDated != null;
+            for (Element e : cloneMsm.getGlobal().getFirstChildElement("header").getChildElements()) {
+                e.detach();
+                allInOneMsmGlobalHeader.appendChild(e);
+            }
+            for (Element map : cloneMsm.getGlobal().getFirstChildElement("dated").getChildElements()) {
+                Element targetMap = allInOneMsmGlobalDated.getFirstChildElement(map.getLocalName());
+                if (targetMap == null) {
+                    targetMap = new Element(map.getLocalName());
+                    allInOneMsmGlobalDated.appendChild(targetMap);
+                }
+                Msm.concatMaps(targetMap, map, totalLength);
+            }
+            for (Element part : cloneMsm.getParts()) {
+                // do we already have this part?
+                int number = Integer.parseInt(part.getAttributeValue("number"));
+                String name = part.getAttributeValue("name");
+                int midiChannel = Integer.parseInt(part.getAttributeValue("midi.channel"));
+                int midiPort = Integer.parseInt(part.getAttributeValue("midi.port"));
+                Element targetPart = allInOneMsm.getPart(number, name, midiChannel, midiPort);
+                if (targetPart == null) {                                   // if the part is new, create an empty target part to be filled subsequently
+                    targetPart = new Element("part");
+                    targetPart.addAttribute(new Attribute("number", String.valueOf(number)));
+                    targetPart.addAttribute(new Attribute("name", name));
+                    targetPart.addAttribute(new Attribute("midi.channel", String.valueOf(midiChannel)));
+                    targetPart.addAttribute(new Attribute("midi.port", String.valueOf(midiPort)));
+                    targetPart.appendChild(new Element("header"));
+                    targetPart.appendChild(new Element("dated"));
+                    allInOneMsm.addPart(targetPart);
+                }
+
+                // append the part's contents to the target part
+                Element targetHeader = targetPart.getFirstChildElement("header");
+                Element targetDated = targetPart.getFirstChildElement("dated");
+                for (Element e : part.getFirstChildElement("header").getChildElements()) {
+                    e.detach();
+                    targetHeader.appendChild(e);
+                }
+                for (Element map : part.getFirstChildElement("dated").getChildElements()) {
+                    Element targetMap = targetDated.getFirstChildElement(map.getLocalName());
+                    if (targetMap == null) {
+                        targetMap = new Element(map.getLocalName());
+                        targetDated.appendChild(targetMap);
+                    }
+                    Msm.concatMaps(targetMap, map, totalLength);
+                }
+            }
+
+            Mpm mpm = msmMpmPairs.getValue().get(i);
+            if (mpm == null)                        // if no performance data
+                continue;                           // go on
+
+            Mpm cloneMpm = new Mpm(mpm.getDocument());
+
+            // append mpm to allInOneMpm
+            allInOneMpm.getMetadata().merge(mpm.getMetadata());
+            for (Performance performance : cloneMpm.getAllPerformances()) {
+                performance.convertPulsesPerQuarter(ppq);       // convert the timing basis to match the timing basis of the concatenated MSM
+                performance.addOffsetToAllDates(totalLength);   // add totalLength to all date attributes
+
+                // add or merge the performance into allInOneMpm
+                Performance targetPerformance = allInOneMpm.getPerformance(performance.getName());  // find a performance of the same name in allInOneMpm
+                if (targetPerformance == null) {                // if there is no such performance
+                    performance.getXml().detach();              // detach the performance from its previous parent, so it can be inserted in the new allInOneMpm
+                    allInOneMpm.addPerformance(performance);    // add the one we have just cloned
+                } else {                                        // we have a performance of the same name
+                    targetPerformance.merge(performance);       // merge performance into targetPerformance
+                }
+            }
+        }
+
+        return new KeyValue<>(allInOneMsm, allInOneMpm);
+    }
+
+    /**
+     * helper method that concatenates two maps, used to concatenate two MSMs
+     * @param mapA this map will get the contents of mapB
+     * @param mapB this map will be empty after the call, hence, only use a clone here!
+     * @param tickOffsetForMapB to increase all date and date.end and target.date attributes by this amount
+     */
+    private static void concatMaps(Element mapA, Element mapB, double tickOffsetForMapB) {
+        if ((mapA == null) || (mapB == null))
+            return;
+
+        for (Element e : mapB.getChildElements()) {
+            e.detach();
+            mapA.appendChild(e);
+            Attribute dateAtt = e.getAttribute("date");
+            if (dateAtt != null)
+                dateAtt.setValue(Double.toString(Double.parseDouble(dateAtt.getValue()) + tickOffsetForMapB));
+            Attribute dateEndAtt = e.getAttribute("date.end");
+            if (dateEndAtt != null)
+                dateEndAtt.setValue(Double.toString(Double.parseDouble(dateEndAtt.getValue()) + tickOffsetForMapB));
+            Attribute targetDateAtt = e.getAttribute("target.date");
+            if (targetDateAtt != null)
+                targetDateAtt.setValue(Double.toString(Double.parseDouble(targetDateAtt.getValue()) + tickOffsetForMapB));
+        }
+    }
+
+    /**
      * create a copy of this object
      * @return the copy of this Msm object
      */
@@ -232,7 +419,7 @@ public class Msm extends AbstractMsm {
         this.setPPQ(ppq);
 
         // find all attributes date, date.end and duration, and convert their values
-        Nodes atts = this.getRootElement().query("descendant::*[attribute::date]/attribute::date | descendant::*[attribute::date.end]/attribute::date.end | descendant::*[attribute::duration]/attribute::duration");
+        Nodes atts = this.getRootElement().query("descendant::*[attribute::date]/attribute::date | descendant::*[attribute::date.end]/attribute::date.end | descendant::*[attribute::duration]/attribute::duration | descendant::*[attribute::target.date]/attribute::target.date");
         for (int i = 0; i < atts.size(); ++i) {
             Attribute att = (Attribute) atts.get(i);
             att.setValue(Double.toString(((Double.parseDouble(att.getValue()) * ppq) / ppqOld)));
@@ -1283,8 +1470,8 @@ public class Msm extends AbstractMsm {
                     feature.getFeatureElement((int) pitch).addNoteId(noteId.getValue());
 
                 // do timing reduction
-                date /= timingReductionFactor;
-                noteOff /= timingReductionFactor;
+                date = (int) (((double) date) / timingReductionFactor);
+                noteOff = (int) (((double) noteOff) / timingReductionFactor);
 
                 // generate pitch data
                 for (int k = date; k < noteOff; ++k)                                                    // for as long as the note duration says

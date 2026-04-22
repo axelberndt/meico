@@ -157,6 +157,16 @@ public class RubatoDef extends AbstractDef {
     }
 
     /**
+     * create a deep copy of this
+     * @return
+     */
+    @Override
+    public RubatoDef clone() {
+        Element xmlCopy = this.getXml().copy();
+        return RubatoDef.createRubatoDef(xmlCopy);
+    }
+
+    /**
      * access the frameLength attribute
      * @return
      */

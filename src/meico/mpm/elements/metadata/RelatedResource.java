@@ -117,4 +117,18 @@ public class RelatedResource extends AbstractXmlSubtree {
     public String getType() {
         return this.type.getValue();
     }
+
+    /**
+     * comparison of a RelatedResource object with another object
+     * @param obj
+     * @return
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof RelatedResource))
+            return false;
+
+        RelatedResource other = (RelatedResource) obj;
+        return this.getUri().equals(other.getUri()) && this.getType().equals(other.getType());
+    }
 }

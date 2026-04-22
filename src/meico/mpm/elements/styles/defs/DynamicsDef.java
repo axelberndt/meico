@@ -89,6 +89,16 @@ public class DynamicsDef extends AbstractDef {
     }
 
     /**
+     * create a deep copy of this
+     * @return
+     */
+    @Override
+    public DynamicsDef clone() {
+        Element xmlCopy = this.getXml().copy();
+        return DynamicsDef.createDynamicsDef(xmlCopy);
+    }
+
+    /**
      * get the dynamicsDef's value
      * @return
      */

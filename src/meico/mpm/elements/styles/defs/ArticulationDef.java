@@ -139,6 +139,16 @@ public class ArticulationDef extends AbstractDef {
     }
 
     /**
+     * create a deep copy of this
+     * @return
+     */
+    @Override
+    public ArticulationDef clone() {
+        Element xmlCopy = this.getXml().copy();
+        return ArticulationDef.createArticulationDef(xmlCopy);
+    }
+
+    /**
      * this sets the specified articulationDef attribute to a default value and removes it from the xml (because redundant)
      * @param name
      */

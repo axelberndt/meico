@@ -129,4 +129,16 @@ public class Comment extends AbstractXmlSubtree {
 
         return this.id.getValue();
     }
+
+    /**
+     * comparison of a Comment object with another object
+     * @param obj
+     * @return
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof Comment))
+            return false;
+        return this.getId().equals(((Comment) obj).getId()) && this.getText().equals(((Comment) obj).getText());
+    }
 }
